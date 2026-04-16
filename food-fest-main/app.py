@@ -212,7 +212,11 @@ def validate():
         "event": event,
         "time": str(datetime.now())
     })
-
+@app.route('/scanner')
+def scanner():
+    if not is_manager():
+        return redirect('/')
+    return render_template('scanner.html')
 # -------- LOGOUT -------- #
 @app.route('/logout')
 def logout():
