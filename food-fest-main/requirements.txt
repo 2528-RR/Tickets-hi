@@ -4,3 +4,4 @@ pillow
 gunicorn
 requests
 PyJWT
+psycopg2-binary
