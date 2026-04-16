@@ -47,75 +47,81 @@
     </div>
 
     <script>
-        let intervals = {};
-        let timeRemaining = {};
+    let intervals = {};
+    let timeRemaining = {};
 
-        function checkEventTimes() {
-            const currentHour = new Date().getHours();
-
-            // Setup Food (13:00)
-            if (!intervals['food']) {
-                if (currentHour >= 13) document.getElementById('qr-food').innerHTML = `<button onclick="startDynamicQR('food')" class="bg-orange-500 hover:bg-orange-600 px-6 py-3 rounded-xl font-semibold transition">Generate QR Code</button>`;
-                else showLock('food', '1:00 PM');
-            }
-
-            // Setup DJ (17:00)
-            if (!intervals['dj']) {
-                if (currentHour >= 17) document.getElementById('qr-dj').innerHTML = `<button onclick="startDynamicQR('dj')" class="bg-purple-600 hover:bg-purple-700 px-6 py-3 rounded-xl font-semibold transition">Generate QR Code</button>`;
-                else showLock('dj', '5:00 PM');
-            }
+    // ✅ Always show buttons (NO LOCK)
+    function checkEventTimes() {
+        if (!intervals['food']) {
+            document.getElementById('qr-food').innerHTML =
+                `<button onclick="startDynamicQR('food')" class="bg-orange-500 hover:bg-orange-600 px-6 py-3 rounded-xl font-semibold transition">Generate QR Code</button>`;
         }
 
-        function showLock(event, time) {
-            document.getElementById(`qr-${event}`).innerHTML = `
-                <div class="text-slate-500 flex flex-col items-center">
-                    <svg class="w-10 h-10 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                    <p class="text-sm font-semibold">Unlocks at ${time}</p>
-                </div>`;
+        if (!intervals['dj']) {
+            document.getElementById('qr-dj').innerHTML =
+                `<button onclick="startDynamicQR('dj')" class="bg-purple-600 hover:bg-purple-700 px-6 py-3 rounded-xl font-semibold transition">Generate QR Code</button>`;
         }
+    }
 
-        function startDynamicQR(event) {
-            document.getElementById(`timer-${event}`).classList.remove('hidden');
-            fetchQR(event); // Fetch immediately
-            
-            timeRemaining[event] = 30;
-            
-            // UI Countdown every 1 second
-            setInterval(() => {
-                timeRemaining[event]--;
-                document.getElementById(`progress-${event}`).style.width = `${(timeRemaining[event] / 30) * 100}%`;
-                
-                // Fetch new QR every 30 seconds
-                if (timeRemaining[event] <= 0) {
-                    timeRemaining[event] = 30;
-                    document.getElementById(`progress-${event}`).style.transition = 'none'; // reset snap
-                    document.getElementById(`progress-${event}`).style.width = '100%';
-                    setTimeout(() => document.getElementById(`progress-${event}`).style.transition = 'width 1s linear', 50);
+    function startDynamicQR(event) {
+        document.getElementById(`timer-${event}`).classList.remove('hidden');
+
+        fetchQR(event);
+
+        timeRemaining[event] = 30;
+
+        intervals[event] = setInterval(() => {
+            timeRemaining[event]--;
+
+            let progress = (timeRemaining[event] / 30) * 100;
+            let bar = document.getElementById(`progress-${event}`);
+
+            // 🎨 Color change (Green → Red)
+            if (progress > 60) bar.style.backgroundColor = "#22c55e"; // green
+            else if (progress > 30) bar.style.backgroundColor = "#eab308"; // yellow
+            else bar.style.backgroundColor = "#ef4444"; // red
+
+            bar.style.width = progress + "%";
+
+            // ⏳ Expired UI
+            if (timeRemaining[event] <= 0) {
+                document.getElementById(`qr-${event}`).innerHTML = `
+                    <div class="text-red-400 font-bold text-lg animate-pulse">
+                        ❌ EXPIRED
+                    </div>`;
+
+                timeRemaining[event] = 30;
+
+                // Fetch new QR after short delay
+                setTimeout(() => {
                     fetchQR(event);
-                }
-            }, 1000);
+                }, 1000);
+            }
 
-            intervals[event] = true;
-        }
+        }, 1000);
+    }
 
-        function fetchQR(event) {
-            fetch(`/generate-qr/${event}`)
-            .then(res => res.json())
-            .then(data => {
-                if(data.qr) {
-                    document.getElementById(`qr-${event}`).innerHTML = `
-                        <div class="flex flex-col items-center">
-                            <div class="bg-white p-3 rounded-xl inline-block mb-3 border-4 border-slate-700">
-                                <img src="${data.qr}" width="180" height="180" alt="QR Code">
-                            </div>
-                            <p class="text-xs text-green-400 font-semibold">Refreshes every 30s</p>
-                        </div>`;
-                }
-            });
-        }
+    function fetchQR(event) {
+        fetch(`/generate-qr/${event}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.qr) {
+                document.getElementById(`qr-${event}`).innerHTML = `
+                    <div class="flex flex-col items-center">
+                        <div class="bg-white p-3 rounded-xl inline-block mb-3 border-4 border-slate-700">
+                            <img src="${data.qr}" width="180" height="180" alt="QR Code">
+                        </div>
+                        <p class="text-green-400 font-bold text-sm animate-pulse">✅ VALID</p>
+                    </div>`;
+            } else if (data.error) {
+                document.getElementById(`qr-${event}`).innerHTML = `
+                    <p class="text-red-400 font-semibold">${data.error}</p>`;
+            }
+        });
+    }
 
-        checkEventTimes();
-        setInterval(checkEventTimes, 60000); // Check unlock time every minute
-    </script>
+    // 🚀 Init
+    checkEventTimes();
+</script>
 </body>
 </html>
