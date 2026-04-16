@@ -159,13 +159,6 @@ def generate_qr(event):
         return jsonify({"error": "Unauthorized"}), 401
 
     email = session['email']
-    current_hour = datetime.now().hour
-
-    if event == 'food' and current_hour >= 18:
-        return jsonify({"error": "Lunch closed"}), 403
-
-    if event == 'dj' and not (17 <= current_hour < 18):
-        return jsonify({"error": "DJ only 5–6 PM"}), 403
 
     payload = {
         "email": email,
