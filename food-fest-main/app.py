@@ -11,7 +11,7 @@ app.secret_key = "super_secret_key_change_this"
 JWT_SECRET = "jwt_secret_change_this"
 
 # ✅ USE ENV VARIABLE (IMPORTANT)
-DATABASE_URL = os.environ.get("postgresql://...@dpg-d7ghrjrbc2fs73bpu760-a.internal:5432/database_url_2bwr")
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 # -------- DATABASE -------- #
 def get_db():
