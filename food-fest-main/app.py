@@ -10,45 +10,58 @@ app = Flask(__name__)
 app.secret_key = "super_secret_key_change_this"
 JWT_SECRET = "jwt_secret_change_this"
 
-# -------- DATABASE (POSTGRESQL) -------- #
-DATABASE_URL = "postgresql://database_url_2bwr_user:FbrUiT6ZuUhUaRj3TM5ea4OutRzuVKXW@dpg-d7ghrjrbc2fs73bpu760-a/database_url_2bwr"
+# ✅ USE ENV VARIABLE (IMPORTANT)
+DATABASE_URL = os.environ.get("postgresql://...@dpg-d7ghrjrbc2fs73bpu760-a.internal:5432/database_url_2bwr")
 
+# -------- DATABASE -------- #
 def get_db():
-    return psycopg2.connect(DATABASE_URL)
+    return psycopg2.connect(DATABASE_URL, sslmode='require')
 
 def init_db():
-    conn = get_db()
-    cur = conn.cursor()
+    try:
+        conn = get_db()
+        cur = conn.cursor()
 
-    # USERS TABLE
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        email TEXT PRIMARY KEY,
-        role TEXT
-    );
-    """)
+        # USERS TABLE
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            email TEXT PRIMARY KEY,
+            role TEXT
+        );
+        """)
 
-    # 🔥 SCANS TABLE (MAIN FIX)
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS scans (
-        id SERIAL PRIMARY KEY,
-        email TEXT,
-        event TEXT,
-        scanned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(email, event)
-    );
-    """)
+        # 🔥 SCANS TABLE (PREVENT DUPLICATES)
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS scans (
+            id SERIAL PRIMARY KEY,
+            email TEXT,
+            event TEXT,
+            scanned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(email, event)
+        );
+        """)
 
-    # Sample users
-    cur.execute("INSERT INTO users (email, role) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-                ('brothersreddy2009@gmail.com', 'student'))
-    cur.execute("INSERT INTO users (email, role) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-                ('mandasriramachandraraghavaredd@gmail.com', 'manager'))
+        # Sample users
+        cur.execute("""
+        INSERT INTO users (email, role)
+        VALUES (%s, %s)
+        ON CONFLICT DO NOTHING
+        """, ('brothersreddy2009@gmail.com', 'student'))
 
-    conn.commit()
-    cur.close()
-    conn.close()
+        cur.execute("""
+        INSERT INTO users (email, role)
+        VALUES (%s, %s)
+        ON CONFLICT DO NOTHING
+        """, ('mandasriramachandraraghavaredd@gmail.com', 'manager'))
 
+        conn.commit()
+        cur.close()
+        conn.close()
+
+    except Exception as e:
+        print("DB INIT ERROR:", e)
+
+# ✅ SAFE INIT
 init_db()
 
 # -------- EMAIL CONFIG -------- #
@@ -77,7 +90,7 @@ def send_otp_email(email, otp):
     except:
         return False
 
-# -------- AUTH HELPERS -------- #
+# -------- AUTH -------- #
 def login_user(email, role):
     session['email'] = email
     session['role'] = role
@@ -128,11 +141,7 @@ def verify():
 
     if otp_store.get(email) == otp:
         login_user(email, role)
-
-        if role == 'student':
-            return redirect('/dashboard')
-        else:
-            return redirect('/scanner')
+        return redirect('/dashboard' if role == 'student' else '/scanner')
 
     return render_template('login.html', step="verify", email=email, role=role, error="Invalid OTP")
 
@@ -153,15 +162,15 @@ def generate_qr(event):
     current_hour = datetime.now().hour
 
     if event == 'food' and current_hour >= 18:
-        return jsonify({"error": "Lunch QR closed after 6 PM"}), 403
+        return jsonify({"error": "Lunch closed"}), 403
 
     if event == 'dj' and not (17 <= current_hour < 18):
-        return jsonify({"error": "DJ QR only available between 5 PM and 6 PM"}), 403
+        return jsonify({"error": "DJ only 5–6 PM"}), 403
 
     payload = {
         "email": email,
         "event": event,
-        "exp": datetime.utcnow() + timedelta(seconds=30),  # 🔥 30 sec QR
+        "exp": datetime.utcnow() + timedelta(seconds=30),
         "iat": datetime.utcnow()
     }
 
@@ -171,7 +180,7 @@ def generate_qr(event):
 
     return jsonify({"qr": qr_url})
 
-# -------- VALIDATE QR (MAIN FIX) -------- #
+# -------- VALIDATE QR -------- #
 @app.route('/validate', methods=['POST'])
 def validate():
     if not is_manager():
@@ -191,16 +200,13 @@ def validate():
     conn = get_db()
     cur = conn.cursor()
 
-    # 🔥 CHECK DUPLICATE
+    # 🔥 PREVENT DUPLICATE ENTRY
     cur.execute("SELECT * FROM scans WHERE email=%s AND event=%s", (email, event))
-    existing = cur.fetchone()
-
-    if existing:
+    if cur.fetchone():
         cur.close()
         conn.close()
         return jsonify({"status": "Already Used", "email": email})
 
-    # ✅ INSERT FIRST TIME ONLY
     cur.execute("INSERT INTO scans (email, event) VALUES (%s, %s)", (email, event))
     conn.commit()
 
